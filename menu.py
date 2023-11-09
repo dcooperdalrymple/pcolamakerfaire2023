@@ -295,10 +295,11 @@ class OscillatorMenuGroup(VoiceMenuGroup):
             self._voice.set_waveform(waveform)
 
 class Menu(MenuGroup):
-    def __init__(self, items:tuple, group:str = ""):
+    def __init__(self, items:tuple, group:str = "", write:function=None):
         MenuGroup.__init__(self, items, group, loop=True)
 
         self._selected = False
+        self._write = write
 
         self._display = Display()
         self._encoder = Encoder()
@@ -344,7 +345,10 @@ class Menu(MenuGroup):
         self.disable()
         self._display.clear()
         self._display.write("Saving...")
-        self.write()
+        if self._write:
+            self._write()
+        else:
+            self.write()
         self._display.write("Complete!")
         time.sleep(0.5)
         self.enable()
@@ -397,6 +401,8 @@ class Menu(MenuGroup):
         except:
             print("Failed to write JSON file: {}".format(path))
         return result
+    def set_write(self, callback:function):
+        self._write=callback
     
     def read(self, name:str="", dir:str="/presets") -> bool:
         if not name: name = self._group
