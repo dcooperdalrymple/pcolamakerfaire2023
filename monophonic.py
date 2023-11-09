@@ -23,8 +23,9 @@ keyboard = TouchKeyboard()
 class PatchMenuItem(NumberMenuItem):
     def __init__(self, maximum:int=16, update:function=None):
         NumberMenuItem.__init__(self, "Patch", step=1, initial=0, minimum=0, maximum=maximum, loop=True, update=update)
-    def set(self, value:float):
-        pass
+    def set(self, value:float, force:bool=False):
+        if force:
+            NumberMenuItem.set(self, value)
     def enable(self, display:Display):
         self._group = ""
         NumberMenuItem.enable(self, display)
@@ -89,6 +90,10 @@ midi.set_note_on(note_on)
 def note_off(notenum):
     keyboard.remove(notenum)
 midi.set_note_off(note_off)
+
+def program_change(patch):
+    patch_item.set(patch, True)
+midi.set_program_change(program_change)
 
 # Load Patch 0
 read_patch()
