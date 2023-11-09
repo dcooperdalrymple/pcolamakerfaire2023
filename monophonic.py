@@ -7,6 +7,7 @@ from pico_synth_sandbox.audio import get_audio_driver
 from pico_synth_sandbox.synth import Synth
 from pico_synth_sandbox.voice.oscillator import Oscillator
 from pico_synth_sandbox.keyboard.touch import TouchKeyboard
+from pico_synth_sandbox.midi import Midi
 from pico_synth_sandbox.display import Display
 
 # Initialize Synth and other objects first for reference in menu items
@@ -63,6 +64,29 @@ def release(notenum, keynum=None):
     if not keyboard.has_notes():
         synth.release()
 keyboard.set_release(release)
+
+# Midi Implementation
+midi = Midi()
+midi.set_thru(True)
+
+def control_change(control, value):
+    if control == 64: # Sustain
+        keyboard.set_sustain(value)
+midi.set_control_change(control_change)
+
+def pitch_bend(value):
+    for voice in synth.voices:
+        voice.set_pitch_bend(value)
+midi.set_pitch_bend(pitch_bend)
+
+def note_on(notenum, velocity):
+    # Add to keyboard for processing
+    keyboard.append(notenum, velocity)
+midi.set_note_on(note_on)
+
+def note_off(notenum):
+    keyboard.remove(notenum)
+midi.set_note_off(note_off)
 
 # Load Patch 0
 read_patch()
