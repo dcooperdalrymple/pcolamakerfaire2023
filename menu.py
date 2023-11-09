@@ -2,7 +2,7 @@
 # 2023 Cooper Dalrymple - me@dcdalrymple.com
 # GPL v3 License
 
-import os, json
+import time, os, json
 from pico_synth_sandbox import clamp, map_value, unmap_value, check_dir
 from pico_synth_sandbox.display import Display
 from pico_synth_sandbox.encoder import Encoder
@@ -341,7 +341,14 @@ class Menu(MenuGroup):
         else:
             self.next(force=True)
     def encoder_long_press(self):
+        self.disable()
+        self._display.clear()
+        self._display.write("Saving...")
         self.write()
+        self._display.write("Complete!")
+        time.sleep(0.5)
+        self.enable()
+        self.draw()
     def encoder_increment(self):
         if self._selected:
             if self.increment():
@@ -415,5 +422,3 @@ class Menu(MenuGroup):
         
         self.set(data)
         return True
-
-        
