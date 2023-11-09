@@ -51,7 +51,9 @@ def read_patch(value=None):
 patch_item.set_update(read_patch)
 
 def write_patch():
+    audio.mute()
     menu.write("monophonic-{:d}".format(int(patch_item.get())))
+    audio.unmute()
 menu.set_write(write_patch)
 
 # Keyboard Setup
