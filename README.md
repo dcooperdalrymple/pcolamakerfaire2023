@@ -23,6 +23,9 @@ The menu can be navigated using the rotary encoder with the actions outlined in 
 ### [Monophonic Synthesizer](monophonic.py)
 A fully parametric dual-oscillator monophonic synthesizer.
 
+### [4-Voice Polyphonic Synthesizer](polyphonic.py)
+A parametric polyphonic synthesizer with 4 voices and 1 oscillator per voice.
+
 ## Installation
 Currently, installation is only detailed for linux-based devices. The installation process should be similar on Windows or Mac, but may require different command line procedures.
 1. Follow the [installation guide](https://pico-synth-sandbox.readthedocs.io/en/latest/software.html) for `pico_synth_sandbox` to get your device set up with CircuitPython and all library requirements.
@@ -31,4 +34,5 @@ Currently, installation is only detailed for linux-based devices. The installati
 4. Run the default action of the provided makefile to compile shared libraries and upload them to your device by running the following command in the root directory of the repository: `make`.
 5. Upload the desired program to device as `code.py` either manually or by using the provided makefile with the name of the desired program, ie: `make monophonic`. The following programs are available:
    * monophonic
+   * polyphonic
 6. Perform a software/hardware reset or use a REPL client such as [Thonny](https://thonny.org/) to run the program.

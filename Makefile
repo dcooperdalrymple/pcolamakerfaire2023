@@ -12,6 +12,7 @@ LIB_MPY = $(LIB_SRCS:%=%.mpy)
 SRCS := $(LIB_MPY)
 
 MONOPHONIC = monophonic.py
+POLYPHONIC = polyphonic.py
 
 all: clean compile upload requirements
 
@@ -35,3 +36,7 @@ requirements:
 monophonic:
 	echo ./$(MONOPHONIC) "=>" $(DEVICE)code.py
 	@cp ./$(MONOPHONIC) $(DEVICE)code.py
+
+polyphonic:
+	echo ./$(POLYPHONIC) "=>" $(DEVICE)code.py
+	@cp ./$(POLYPHONIC) $(DEVICE)code.py
