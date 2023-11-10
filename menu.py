@@ -113,6 +113,17 @@ class NumberMenuItem(MenuItem):
     def _do_update(self):
         if self._update: self._update(self.get())
 
+class RampNumberMenuItem(NumberMenuItem):
+    def __init__(self, title:str="", group:str="", step:float=0.1, initial:float=0.0, minimum:float=0.0, maximum:float=1.0, smoothing:float=2.0, loop:bool=False, update:function=None):
+        NumberMenuItem.__init__(self, title, group, step, initial, 0.0, 1.0, loop, update)
+        self._ramp_minimum = minimum
+        self._ramp_maximum = maximum
+        self._ramp_smoothing = smoothing
+    def get(self) -> float:
+        return map_value(math.pow(self._value, self._ramp_smoothing), self._ramp_minimum, self._ramp_maximum)
+    def get_relative(self) -> float:
+        return self._value
+
 class BarMenuItem(NumberMenuItem):
     def __init__(self, title:str="", group:str="", step:float=1/16, initial:float=0.0, minimum:float=0.0, maximum:float=1.0, update:function=None):
         NumberMenuItem.__init__(self, title, group, step, initial, minimum, maximum, False, update)
@@ -400,9 +411,10 @@ class LFOMenuGroup(MenuGroup):
             maximum=0.5,
             update=update_depth
         )
-        self._rate = NumberMenuItem(
+        self._rate = RampNumberMenuItem(
             "Rate",
-            maximum=4.0,
+            step=0.01, # relative step
+            maximum=32.0,
             update=update_rate
         )
         MenuGroup.__init__(self, (
