@@ -433,7 +433,7 @@ class MixMenuGroup(MenuGroup):
     def enable(self, display:Display, last:bool = False):
         MenuGroup.enable(self, display, last)
         display.enable_horizontal_graph()
-        display.write('L', (8,1), 1)
+        display.write(' L', (7,1), 1) # Space to clear out previous screen
         display.write('R', (15,1), 1)
     def draw(self, display:Display):
         display.write(
