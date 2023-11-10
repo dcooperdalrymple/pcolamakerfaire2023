@@ -2,7 +2,7 @@
 # 2023 Cooper Dalrymple - me@dcdalrymple.com
 # GPL v3 License
 
-import time, os, json
+import time, os, json, math
 import ulab.numpy as numpy
 from pico_synth_sandbox import clamp, map_value, unmap_value, check_dir
 from pico_synth_sandbox.display import Display
@@ -118,7 +118,9 @@ class BarMenuItem(NumberMenuItem):
         display.enable_horizontal_graph()
         NumberMenuItem.enable(self, display)
     def draw(self, display:Display):
-        display.write_horizontal_graph(self._value, self._minimum, self._maximum, (0,1), 16)
+        self.draw_bar(display)
+    def draw_bar(self, display:Display, position=(0,1), length=16, centered=False):
+        display.write_horizontal_graph(self._value, self._minimum, self._maximum, position, length, centered)
 
 class ListMenuItem(NumberMenuItem):
     def __init__(self, items:tuple[str], title:str="", group:str="", loop:bool=True, update:function=None):
@@ -348,7 +350,7 @@ class ADSREnvelopeMenuGroup(MenuGroup):
 
 class LFOMenuGroup(MenuGroup):
     def __init__(self, update_depth:function=None, update_rate:function=None, group:str=""):
-        self._depth = NumberMenuItem(
+        self._depth = BarMenuItem(
             "Depth",
             step=1/64,
             maximum=0.5,
@@ -367,11 +369,7 @@ class LFOMenuGroup(MenuGroup):
         MenuGroup.enable(self, display, last)
         display.enable_horizontal_graph()
     def draw(self, display:Display):
-        display.write_horizontal_graph(
-            value=self._depth.get_relative(),
-            position=(0,1),
-            width=10
-        )
+        self._depth.draw_bar(display, (0,1), 10)
         display.write("{:.1f}hz".format(self._rate.get()), position=(10,1), length=6, right_aligned=True)
 
 class FilterMenuGroup(MenuGroup):
@@ -388,7 +386,7 @@ class FilterMenuGroup(MenuGroup):
             step=0.05,
             update=apply_value(voices, Voice.set_filter_frequency)
         )
-        self._resonance = NumberMenuItem(
+        self._resonance = BarMenuItem(
             "Reso",
             update=apply_value(voices, Voice.set_filter_resonance)
         )
@@ -412,11 +410,95 @@ class FilterMenuGroup(MenuGroup):
             length=8,
             right_aligned=True
         )
-        display.write_horizontal_graph(
-            value=self._resonance.get(),
-            position=(10,1),
-            width=6
+        self._resonance.draw_bar(display, (10,1), 6)
+
+class MixMenuGroup(MenuGroup):
+    def __init__(self, update_level:function=None, update_pan:function=None, group:str=""):
+        self._level = NumberMenuItem(
+            "Level",
+            initial=1.0,
+            step=1/32,
+            update=update_level
         )
+        self._pan = BarMenuItem(
+            "Pan",
+            step=1/8,
+            minimum=-1.0,
+            update=update_pan
+        )
+        MenuGroup.__init__(self, (
+            self._level,
+            self._pan
+        ), group)
+    def enable(self, display:Display, last:bool = False):
+        MenuGroup.enable(self, display, last)
+        display.enable_horizontal_graph()
+        display.write('L', (8,1), 1)
+        display.write('R', (15,1), 1)
+    def draw(self, display:Display):
+        display.write(
+            value="-infdb" if self._level.get() == 0.0 else "{:.1f}db".format(math.log(self._level.get())*10.0),
+            position=(0,1),
+            length=7,
+            right_aligned=True
+        )
+        self._pan.draw_bar(display, (9,1), 6, True)
+
+class TuneMenuGroup(MenuGroup):
+    def __init__(self, update_coarse:function=None, update_fine:function=None, update_glide:function=None, update_bend:function=None, group:str=""):
+        self._coarse = NumberMenuItem(
+            "Coarse",
+            step=1/12,
+            minimum=-2.0,
+            maximum=2.0,
+            update=update_coarse
+        )
+        self._fine = BarMenuItem(
+            "Fine",
+            step=1/12/5,
+            minimum=-1/12,
+            maximum=1/12,
+            update=update_fine
+        )
+        self._glide = NumberMenuItem(
+            "Glide",
+            step=0.1,
+            update=update_glide
+        )
+        self._bend = BarMenuItem(
+            "Bend",
+            step=1/12,
+            minimum=-1.0,
+            update=update_bend
+        )
+        MenuGroup.__init__(self, (
+            self._coarse,
+            self._fine,
+            self._glide,
+            self._bend
+        ), group)
+    def enable(self, display:Display, last:bool = False):
+        MenuGroup.enable(self, display, last)
+        display.enable_horizontal_graph()
+        display.write(' -', (3,1), 2) # Extra space to clear out previous screen
+        display.write('+', (7,1), 1)
+        display.write('-', (12,1), 1)
+        display.write('+', (15,1), 1)
+    def draw(self, display:Display):
+        display.write(
+            value="{:+d}".format(int(self._coarse.get()*12)).replace("+0", "0"),
+            position=(0,1),
+            length=3,
+            right_aligned=True
+        )
+        self._fine.draw_bar(display, (5,1), 2, True)
+        display.write(
+            value="{:.1f}s".format(self._glide.get()),
+            position=(8,1),
+            length=4,
+            right_aligned=True
+        )
+        self._bend.draw_bar(display, (13,1), 2, True)
 
 class VoiceMenuGroup(MenuGroup):
     def __init__(self, voices:Voice|tuple[Voice], group:str=""):
@@ -435,9 +517,21 @@ class VoiceMenuGroup(MenuGroup):
             FilterMenuGroup(voices, "Filter")
         ), group)
 
-class OscillatorMenuGroup(VoiceMenuGroup):
+class OscillatorMenuGroup(MenuGroup):
     def __init__(self, voices:Oscillator|tuple[Oscillator], group:str=""):
         voices = tuple(voices)
+        MenuGroup.__init__(self, (
+            MixMenuGroup(
+                update_level=apply_value(voices, Oscillator.set_level),
+                update_pan=apply_value(voices, Oscillator.set_pan),
+                group=group
+            ),
+            TuneMenuGroup(
+                update_coarse=apply_value(voices, Oscillator.set_coarse_tune),
+                update_fine=apply_value(voices, Oscillator.set_fine_tune, 1/12/16/12),
+                update_glide=apply_value(voices, Oscillator.set_glide),
+                update_bend=apply_value(voices, Oscillator.set_pitch_bend_amount),
+                group="Tune"
             ),
             WaveformMenuItem(
                 update=apply_value(voices, Oscillator.set_waveform)
@@ -451,12 +545,6 @@ class OscillatorMenuGroup(VoiceMenuGroup):
                 update_depth=apply_value(voices, Oscillator.set_vibrato_depth),
                 update_rate=apply_value(voices, Oscillator.set_vibrato_rate, 0.025),
                 group=group+"Vibrato"
-            ),
-            BarMenuItem(
-                "Pan",
-                step=1/8,
-                minimum=-1.0,
-                update=apply_value(voices, Oscillator.set_pan)
             ),
             LFOMenuGroup(
                 update_depth=apply_value(voices, Oscillator.set_pan_depth),
@@ -482,22 +570,7 @@ class OscillatorMenuGroup(VoiceMenuGroup):
                 tuple(voice._filter_envelope for voice in voices),
                 group=group+"FEnv"
             )
-        )
-        self._assign_group_name()
-    def _update_waveform(voice:Oscillator, value:float):
-        value = int(value)
-        if value == 1:
-            waveform = Waveform.get_saw()
-        elif value == 2:
-            waveform = Waveform.get_sine()
-        elif value == 3:
-            waveform = Waveform.get_noise()
-        elif value == 4:
-            waveform = Waveform.get_sine_noise()
-        else:
-            waveform = Waveform.get_square()
-        if waveform:
-            voice.set_waveform(waveform)
+        ), group)
 
 class Menu(MenuGroup):
     def __init__(self, items:tuple, group:str = "", write:function=None):
