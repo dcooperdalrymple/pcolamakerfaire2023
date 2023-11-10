@@ -57,6 +57,8 @@ class MenuItem:
         self._enabled = False
     def draw(self, display:Display):
         pass
+    def get_cursor_position(self) -> tuple:
+        return (0,1)
 
 class NumberMenuItem(MenuItem):
     def __init__(self, title:str="", group:str="", step:float=0.1, initial:float=0.0, minimum:float=0.0, maximum:float=1.0, loop:bool=False, update:function=None):
@@ -121,6 +123,8 @@ class BarMenuItem(NumberMenuItem):
         self.draw_bar(display)
     def draw_bar(self, display:Display, position=(0,1), length=16, centered=False):
         display.write_horizontal_graph(self._value, self._minimum, self._maximum, position, length, centered)
+    def get_bar_position(self, x=0, length=16) -> int:
+        return x+min(int(length*self.get_relative()),length-1)
 
 class ListMenuItem(NumberMenuItem):
     def __init__(self, items:tuple[str], title:str="", group:str="", loop:bool=True, update:function=None):
@@ -176,6 +180,8 @@ class WaveformMenuItem(ListMenuItem):
             position=(12,0),
             length=4
         )
+    def get_cursor_position(self) -> tuple:
+        return (12,0)
 
 class MenuGroup(MenuItem):
     def __init__(self, items:tuple[MenuItem], group:str="", loop:bool=False):
@@ -241,6 +247,8 @@ class MenuGroup(MenuItem):
 
     def draw(self, display:Display):
         self.get_current_item().draw(display)
+    def get_cursor_position(self) -> tuple:
+        return self.get_current_item().get_cursor_position()
 
 class AREnvelopeMenuGroup(MenuGroup):
     def __init__(self, envelopes:AREnvelope|tuple[AREnvelope], group:str=""):
@@ -267,9 +275,15 @@ class AREnvelopeMenuGroup(MenuGroup):
     def enable(self, display:Display, last:bool = False):
         MenuGroup.enable(self, display, last)
         display.enable_vertical_graph()
+    def _get_attack_bars(self) -> int:
+        return round(map_value(self._attack.get_relative(), 1, 8))
+    def _get_release_bars(self) -> int:
+        return round(map_value(self._release.get_relative(), 1, 8))
+    def _get_amount_bars(self) -> int:
+        return 16 - (self._get_attack_bars() + self._get_release_bars())
     def draw(self, display:Display):
-        attack_bars = round(map_value(self._attack.get_relative(), 1, 8))
-        release_bars = round(map_value(self._release.get_relative(), 1, 8))
+        attack_bars = self._get_attack_bars()
+        release_bars = self._get_release_bars()
         amount_bars = 16 - (attack_bars + release_bars)
         amount = self._amount.get_relative()
         for i in range(attack_bars):
@@ -279,6 +293,15 @@ class AREnvelopeMenuGroup(MenuGroup):
                 display.write_vertical_graph(amount, position=(attack_bars+i,1))
         for i in range(release_bars):
             display.write_vertical_graph(amount * ((i + 1) / release_bars), position=(15-i,1))
+    def get_cursor_position(self) -> tuple:
+        x = 0
+        if self._attack.is_enabled():
+            x = self._get_attack_bars()/2
+        elif self._amount.is_enabled():
+            x = self._get_attack_bars() + self._get_amount_bars()/2
+        elif self._release.is_enabled():
+            x = 16 - self._get_release_bars()/2
+        return (round(x),1)
 
 class ADSREnvelopeMenuGroup(MenuGroup):
     def __init__(self, voices:Oscillator|tuple[Oscillator], group:str=""):
@@ -323,10 +346,18 @@ class ADSREnvelopeMenuGroup(MenuGroup):
     def enable(self, display:Display, last:bool = False):
         MenuGroup.enable(self, display, last)
         display.enable_vertical_graph()
+    def _get_attack_bars(self) -> int:
+        return round(map_value(self._attack_time.get_relative(), 1, 5))
+    def _get_decay_bars(self) -> int:
+        return round(map_value(self._decay_time.get_relative(), 1, 5))
+    def _get_release_bars(self) -> int:
+        return round(map_value(self._release_time.get_relative(), 1, 5))
+    def _get_sustain_bars(self) -> int:
+        return 16 - (self._get_attack_bars() + self._get_decay_bars() + self._get_release_bars())
     def draw(self, display:Display):
-        attack_bars = round(map_value(self._attack_time.get_relative(), 1, 5))
-        decay_bars = round(map_value(self._decay_time.get_relative(), 1, 5))
-        release_bars = round(map_value(self._release_time.get_relative(), 1, 5))
+        attack_bars = self._get_attack_bars()
+        decay_bars = self._get_decay_bars()
+        release_bars = self._get_release_bars()
         sustain_bars = 16 - (attack_bars + decay_bars + release_bars)
         attack_level = self._attack_level.get_relative()
         sustain_level = self._sustain_level.get_relative()
@@ -347,6 +378,19 @@ class ADSREnvelopeMenuGroup(MenuGroup):
                 value = sustain_level * ((i + 1) / release_bars),
                 position = (15-i,1)
             )
+    def get_cursor_position(self) -> tuple:
+        x = 0
+        if self._attack_time.is_enabled():
+            x = self._get_attack_bars()/2
+        elif self._attack_level.is_enabled():
+            x = self._get_attack_bars()
+        elif self._decay_time.is_enabled():
+            x = self._get_attack_bars()+self._get_decay_bars()/2
+        elif self._sustain_level.is_enabled():
+            x = self._get_attack_bars()+self._get_decay_bars()+self._get_sustain_bars()/2
+        elif self._release_time.is_enabled():
+            x = 16 - self._get_release_bars()/2
+        return (round(x),1)
 
 class LFOMenuGroup(MenuGroup):
     def __init__(self, update_depth:function=None, update_rate:function=None, group:str=""):
@@ -371,6 +415,11 @@ class LFOMenuGroup(MenuGroup):
     def draw(self, display:Display):
         self._depth.draw_bar(display, (0,1), 10)
         display.write("{:.1f}hz".format(self._rate.get()), position=(10,1), length=6, right_aligned=True)
+    def get_cursor_position(self) -> tuple:
+        if self._rate.is_enabled():
+            return (10,1)
+        else:
+            return (self._depth.get_bar_position(10,6),1)
 
 class FilterMenuGroup(MenuGroup):
     def __init__(self, voices:Voice|tuple[Voice], group:str=""):
@@ -411,6 +460,13 @@ class FilterMenuGroup(MenuGroup):
             right_aligned=True
         )
         self._resonance.draw_bar(display, (10,1), 6)
+    def get_cursor_position(self) -> tuple:
+        if self._frequency.is_enabled():
+            return (2,1)
+        elif self._resonance.is_enabled():
+            return (self._resonance.get_bar_position(10,6),1)
+        else:
+            return (0,1)
 
 class MixMenuGroup(MenuGroup):
     def __init__(self, update_level:function=None, update_pan:function=None, group:str=""):
@@ -433,7 +489,7 @@ class MixMenuGroup(MenuGroup):
     def enable(self, display:Display, last:bool = False):
         MenuGroup.enable(self, display, last)
         display.enable_horizontal_graph()
-        display.write(' L', (7,1), 1) # Space to clear out previous screen
+        display.write(' L', (7,1), 2) # Space to clear out previous screen
         display.write('R', (15,1), 1)
     def draw(self, display:Display):
         display.write(
@@ -443,6 +499,11 @@ class MixMenuGroup(MenuGroup):
             right_aligned=True
         )
         self._pan.draw_bar(display, (9,1), 6, True)
+    def get_cursor_position(self) -> tuple:
+        if self._pan.is_enabled():
+            return (self._pan.get_bar_position(9,6),1)
+        else:
+            return (0,1)
 
 class TuneMenuGroup(MenuGroup):
     def __init__(self, update_coarse:function=None, update_fine:function=None, update_glide:function=None, update_bend:function=None, group:str=""):
@@ -493,12 +554,21 @@ class TuneMenuGroup(MenuGroup):
         )
         self._fine.draw_bar(display, (5,1), 2, True)
         display.write(
-            value="{:.1f}s".format(self._glide.get()),
+            value="{:.1f}s".format(self._glide.get()).replace("0.", "."),
             position=(8,1),
             length=4,
             right_aligned=True
         )
         self._bend.draw_bar(display, (13,1), 2, True)
+    def get_cursor_position(self) -> tuple:
+        if self._fine.is_enabled():
+            return (self._fine.get_bar_position(5,2),1)
+        elif self._glide.is_enabled():
+            return (8,1)
+        elif self._bend.is_enabled():
+            return (self._bend.get_bar_position(13,2),1)
+        else:
+            return (0,1)
 
 class VoiceMenuGroup(MenuGroup):
     def __init__(self, voices:Voice|tuple[Voice], group:str=""):
@@ -555,16 +625,10 @@ class OscillatorMenuGroup(MenuGroup):
                 voices,
                 group=group+"AEnv"
             ),
-            BarMenuItem(
-                "Fltr LFO Rate",
-                maximum=4.0,
-                update=apply_value(voices, Oscillator.set_filter_lfo_rate)
-            ),
-            BarMenuItem(
-                "Fltr LFO Depth",
-                step=1/64,
-                maximum=0.5,
-                update=apply_value(voices, Oscillator.set_filter_lfo_depth)
+            LFOMenuGroup(
+                update_depth=apply_value(voices, Oscillator.set_filter_lfo_depth),
+                update_rate=apply_value(voices, Oscillator.set_filter_lfo_rate),
+                group=group+"FltrLFO"
             ),
             AREnvelopeMenuGroup(
                 tuple(voice._filter_envelope for voice in voices),
@@ -583,13 +647,14 @@ class Menu(MenuGroup):
         self._encoder = Encoder()
 
         self._display.clear()
-        self._display.set_cursor_position(0,0)
         self._display.hide_cursor()
         self._display.write("PicoSynthSandbox", (0,0))
         self._display.write("Loading...", (0,1))
 
     def ready(self):
         self._display.clear()
+        self._display.show_cursor(0,0)
+        self._display.set_cursor_blink(True)
         self._index = 0
         self.draw()
         self.enable()
@@ -611,8 +676,7 @@ class Menu(MenuGroup):
 
     def encoder_click(self):
         self._selected = not self._selected
-        self._display.set_cursor_enabled(self._selected)
-        self._display.set_cursor_blink(self._selected)
+        self.update_cursor_position()
     def encoder_double_click(self):
         if self._selected:
             if self.reset():
@@ -656,6 +720,13 @@ class Menu(MenuGroup):
     def draw(self, display:Display=None):
         if not display: display=self._display
         MenuGroup.draw(self, display)
+        self.update_cursor_position()
+
+    def update_cursor_position(self):
+        if not self._selected:
+            self._display.set_cursor_position(0,0)
+        else:
+            self._display.set_cursor_position(self.get_cursor_position())
 
     def update(self):
         self._encoder.update()
