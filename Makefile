@@ -13,7 +13,7 @@ SRCS := $(LIB_MPY)
 
 MONOPHONIC = monophonic.py
 
-all: clean compile upload
+all: clean compile upload requirements
 
 clean:
 	@rm $(LIB_MPY) || true
@@ -28,6 +28,9 @@ upload: $(SRCS)
 		echo $${file} "=>" $(DEVICE)$${file} ; \
 		cp $${file} $(DEVICE)$${file} ; \
 	done
+
+requirements:
+	circup install -r requirements.txt
 
 monophonic:
 	echo ./$(MONOPHONIC) "=>" $(DEVICE)code.py
