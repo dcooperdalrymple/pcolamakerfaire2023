@@ -12,11 +12,6 @@ from pico_synth_sandbox.voice import Voice, AREnvelope
 from pico_synth_sandbox.voice.oscillator import Oscillator
 from pico_synth_sandbox.waveform import Waveform
 
-def get_tuple(objects) -> tuple:
-    if type(objects) is list: return tuple(objects)
-    if not type(objects) is tuple: return tuple([objects])
-    return objects
-
 def apply_value(items:tuple, method:function|str, offset:float=0.0) -> function:
     if type(method) is str:
         method = getattr(type(items[0]), method)
@@ -247,7 +242,7 @@ class MenuGroup(MenuItem):
 
 class AREnvelopeMenuGroup(MenuGroup):
     def __init__(self, envelopes:AREnvelope|tuple[AREnvelope], group:str=""):
-        envelopes = get_tuple(envelopes)
+        envelopes = tuple(envelopes)
         self._attack = NumberMenuItem(
             "Attack",
             initial=envelopes[0].get_attack(),
@@ -285,7 +280,7 @@ class AREnvelopeMenuGroup(MenuGroup):
 
 class ADSREnvelopeMenuGroup(MenuGroup):
     def __init__(self, voices:Oscillator|tuple[Oscillator], group:str=""):
-        voices = get_tuple(voices)
+        voices = tuple(voices)
         self._attack_time = NumberMenuItem(
             title="Attack",
             initial=voices[0]._attack_time,
@@ -381,7 +376,7 @@ class LFOMenuGroup(MenuGroup):
 
 class FilterMenuGroup(MenuGroup):
     def __init__(self, voices:Voice|tuple[Voice], group:str=""):
-        voices = get_tuple(voices)
+        voices = tuple(voices)
         self._type = ListMenuItem(
             ("LP", "HP", "BP"),
             "Type",
@@ -425,7 +420,7 @@ class FilterMenuGroup(MenuGroup):
 
 class VoiceMenuGroup(MenuGroup):
     def __init__(self, voices:Voice|tuple[Voice], group:str=""):
-        voices = get_tuple(voices)
+        voices = tuple(voices)
         MenuGroup.__init__(self, (
             BarMenuItem(
                 "Level",
@@ -442,32 +437,7 @@ class VoiceMenuGroup(MenuGroup):
 
 class OscillatorMenuGroup(VoiceMenuGroup):
     def __init__(self, voices:Oscillator|tuple[Oscillator], group:str=""):
-        voices = get_tuple(voices)
-        VoiceMenuGroup.__init__(self, voices, group)
-        self._items = self._items + (
-            BarMenuItem(
-                "Glide",
-                update=apply_value(voices, Oscillator.set_glide)
-            ),
-            BarMenuItem(
-                "Pitch Bend",
-                step=1/8,
-                minimum=-1.0,
-                update=apply_value(voices, Oscillator.set_pitch_bend_amount)
-            ),
-            BarMenuItem(
-                "Course Tune",
-                step=1/12,
-                minimum=-2.0,
-                maximum=2.0,
-                update=apply_value(voices, Oscillator.set_coarse_tune)
-            ),
-            BarMenuItem(
-                "Fine Tune",
-                step=1/12/16,
-                minimum=-1/12,
-                maximum=1/12,
-                update=apply_value(voices, Oscillator.set_fine_tune)
+        voices = tuple(voices)
             ),
             WaveformMenuItem(
                 update=apply_value(voices, Oscillator.set_waveform)
