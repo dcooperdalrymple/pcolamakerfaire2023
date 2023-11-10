@@ -39,8 +39,8 @@ menu = Menu((
     MenuGroup((
         ListMenuItem(("High", "Low", "Last"), "Mode", update=keyboard.set_mode),
     ), "Keys"),
-    OscillatorMenuGroup(osc1, synth, "Osc1"),
-    OscillatorMenuGroup(osc2, synth, "Osc2"),
+    OscillatorMenuGroup(osc1, "Osc1"),
+    OscillatorMenuGroup(osc2, "Osc2"),
 ), "monophonic")
 default_patch = menu.get()
 

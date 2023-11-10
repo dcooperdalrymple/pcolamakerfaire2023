@@ -3,13 +3,27 @@
 # GPL v3 License
 
 import time, os, json
+import ulab.numpy as numpy
 from pico_synth_sandbox import clamp, map_value, unmap_value, check_dir
 from pico_synth_sandbox.display import Display
 from pico_synth_sandbox.encoder import Encoder
-from pico_synth_sandbox.synth import Synth
+from pico_synth_sandbox.synth import MIN_FILTER_FREQUENCY, MAX_FILTER_FREQUENCY
 from pico_synth_sandbox.voice import Voice, AREnvelope
 from pico_synth_sandbox.voice.oscillator import Oscillator
 from pico_synth_sandbox.waveform import Waveform
+
+def get_tuple(objects) -> tuple:
+    if type(objects) is list: return tuple(objects)
+    if not type(objects) is tuple: return tuple([objects])
+    return objects
+
+def apply_value(items:tuple, method:function|str, offset:float=0.0) -> function:
+    if type(method) is str:
+        method = getattr(type(items[0]), method)
+    if offset > 0.0:
+        return lambda value : [method(items[i], value+offset*(i-(len(items)-1)/2)) for i in range(len(items))]
+    else:
+        return lambda value : [method(items[i], value) for i in range(len(items))]
 
 class MenuItem:
     def __init__(self, title:str="", group:str=""):
@@ -64,6 +78,8 @@ class NumberMenuItem(MenuItem):
     def get_relative(self) -> float:
         return unmap_value(self._value, self._minimum, self._maximum)
     def set(self, value:float):
+        if not type(value) is float and not type(value) is int:
+            return
         value = clamp(value, self._minimum, self._maximum)
         if self._value != value:
             self._value = value
@@ -113,8 +129,56 @@ class ListMenuItem(NumberMenuItem):
     def __init__(self, items:tuple[str], title:str="", group:str="", loop:bool=True, update:function=None):
         NumberMenuItem.__init__(self, title, group, 1, 0, 0, len(items)-1, loop, update)
         self._items = items
+    def get_item(self) -> str:
+        return self._items[int(self._value) % len(self._items)]
     def draw(self, display:Display):
-        display.write(self._items[int(self._value) % len(self._items)], (0,1))
+        display.write(self.get_item(), (0,1))
+
+class WaveformMenuItem(ListMenuItem):
+    def __init__(self, group:str="", update:function=None):
+        ListMenuItem.__init__(
+            self,
+            items=("SQUR", "SAWT", "SINE", "NOISE", "SINN"),
+            title="Waveform",
+            group=group,
+            update=update
+        )
+    def get_waveform(self):
+        value = int(self._value)
+        if value == 1:
+            return Waveform.get_saw()
+        elif value == 2:
+            return Waveform.get_sine()
+        elif value == 3:
+            return Waveform.get_noise()
+        elif value == 4:
+            return Waveform.get_sine_noise()
+        else:
+            return Waveform.get_square()
+    def _do_update(self):
+        if self._update: self._update(self.get_waveform())
+    def enable(self, display:Display):
+        ListMenuItem.enable(self, display)
+        display.enable_vertical_graph()
+    def draw(self, display:Display):
+        waveform = self.get_waveform()
+        periods = 2
+        wavelength = 16//periods
+        segment = len(waveform)//wavelength
+        amplitude = Waveform.get_amplitude()
+        for j in range(periods):
+            for i in range(wavelength):
+                display.write_vertical_graph(
+                    value=numpy.sum(waveform[i*segment:(i+1)*segment]) / segment,
+                    minimum=-amplitude*11/8,
+                    maximum=amplitude,
+                    position=(i+j*wavelength,1)
+                )
+        display.write(
+            value=self.get_item(),
+            position=(12,0),
+            length=4
+        )
 
 class MenuGroup(MenuItem):
     def __init__(self, items:tuple[MenuItem], group:str="", loop:bool=False):
@@ -122,10 +186,11 @@ class MenuGroup(MenuItem):
         self._items = items
         self._index = 0
         self._loop = loop
-
+        self._assign_group_name()
+    def _assign_group_name(self):
         if self._group:
             for item in self._items:
-                if not issubclass(type(self.get_current_item()), MenuGroup):
+                if not issubclass(type(item), MenuGroup):
                     item._group = self._group
     
     def get_current_item(self) -> MenuItem:
@@ -181,10 +246,26 @@ class MenuGroup(MenuItem):
         self.get_current_item().draw(display)
 
 class AREnvelopeMenuGroup(MenuGroup):
-    def __init__(self, envelope:AREnvelope, group:str=""):
-        self._attack = NumberMenuItem("Attack", initial=envelope.get_attack(), maximum=2.0, update=envelope.set_attack)
-        self._release = NumberMenuItem("Release", initial=envelope.get_release(), maximum=2.0, update=envelope.set_release)
-        self._amount = NumberMenuItem("Amount", initial=envelope.get_amount(), step=0.05, update=envelope.set_amount)
+    def __init__(self, envelopes:AREnvelope|tuple[AREnvelope], group:str=""):
+        envelopes = get_tuple(envelopes)
+        self._attack = NumberMenuItem(
+            "Attack",
+            initial=envelopes[0].get_attack(),
+            maximum=2.0,
+            update=apply_value(envelopes, AREnvelope.set_attack)
+        )
+        self._release = NumberMenuItem(
+            "Release",
+            initial=envelopes[0].get_release(),
+            maximum=2.0,
+            update=apply_value(envelopes, AREnvelope.set_release)
+        )
+        self._amount = NumberMenuItem(
+            "Amount",
+            initial=envelopes[0].get_amount(),
+            step=0.05,
+            update=apply_value(envelopes, AREnvelope.set_amount)
+        )
         MenuGroup.__init__(self, (self._attack, self._release, self._amount), group)
     def enable(self, display:Display, last:bool = False):
         MenuGroup.enable(self, display, last)
@@ -203,13 +284,45 @@ class AREnvelopeMenuGroup(MenuGroup):
             display.write_vertical_graph(amount * ((i + 1) / release_bars), position=(15-i,1))
 
 class ADSREnvelopeMenuGroup(MenuGroup):
-    def __init__(self, voice:Oscillator, group:str=""):
-        self._attack_time = NumberMenuItem("Attack", initial=voice._attack_time, maximum=2.0, update=voice.set_envelope_attack_time)
-        self._attack_level = NumberMenuItem("Atk Lvl", initial=voice._attack_level, step=0.05, update=voice.set_envelope_attack_level)
-        self._decay_time = NumberMenuItem("Decay", initial=voice._decay_time, maximum=2.0, update=voice.set_envelope_decay_time)
-        self._sustain_level = NumberMenuItem("Stn Lvl", initial=voice._sustain_level, step=0.05, update=voice.set_envelope_sustain_level)
-        self._release_time = NumberMenuItem("Release", initial=voice._release_time, maximum=2.0, update=voice.set_envelope_release_time)
-        MenuGroup.__init__(self, (self._attack_time, self._attack_level, self._decay_time, self._sustain_level, self._release_time), group)
+    def __init__(self, voices:Oscillator|tuple[Oscillator], group:str=""):
+        voices = get_tuple(voices)
+        self._attack_time = NumberMenuItem(
+            title="Attack",
+            initial=voices[0]._attack_time,
+            maximum=2.0,
+            update=apply_value(voices, Oscillator.set_envelope_attack_time)
+        )
+        self._attack_level = NumberMenuItem(
+            "Atk Lvl",
+            initial=voices[0]._attack_level,
+            step=0.05,
+            update=apply_value(voices, Oscillator.set_envelope_attack_level)
+        )
+        self._decay_time = NumberMenuItem(
+            "Decay",
+            initial=voices[0]._decay_time,
+            maximum=2.0,
+            update=apply_value(voices, Oscillator.set_envelope_decay_time)
+        )
+        self._sustain_level = NumberMenuItem(
+            "Stn Lvl",
+            initial=voices[0]._sustain_level,
+            step=0.05,
+            update=apply_value(voices, Oscillator.set_envelope_sustain_level)
+        )
+        self._release_time = NumberMenuItem(
+            "Release",
+            initial=voices[0]._release_time,
+            maximum=2.0,
+            update=apply_value(voices, Oscillator.set_envelope_release_time)
+        )
+        MenuGroup.__init__(self, (
+            self._attack_time,
+            self._attack_level,
+            self._decay_time,
+            self._sustain_level,
+            self._release_time
+        ), group)
     def enable(self, display:Display, last:bool = False):
         MenuGroup.enable(self, display, last)
         display.enable_vertical_graph()
@@ -238,52 +351,172 @@ class ADSREnvelopeMenuGroup(MenuGroup):
                 position = (15-i,1)
             )
 
-class VoiceMenuGroup(MenuGroup):
-    def __init__(self, voice:Voice, synth:Synth, items:tuple[MenuItem]=None, group:str=""):
-        self._voice = voice
-        self._synth = synth
-        _items = (
-            BarMenuItem("Level", initial=1.0, update=voice.set_level),
-            BarMenuItem("Velocity", initial=0.0, update=voice.set_velocity_amount),
-            ListMenuItem(("Low Pass", "High Pass", "Band Pass"), "Filter Type", update=self._update_filter_type),
-            BarMenuItem("Filter Freq", initial=1.0, step=0.05, update=self._update_filter_frequency),
-            BarMenuItem("Filter Reso", update=self._update_filter_resonance)
+class LFOMenuGroup(MenuGroup):
+    def __init__(self, update_depth:function=None, update_rate:function=None, group:str=""):
+        self._depth = NumberMenuItem(
+            "Depth",
+            step=1/64,
+            maximum=0.5,
+            update=update_depth
         )
-        if items: _items = (_items + items)
-        MenuGroup.__init__(self, _items, group)
-    def _update_filter_type(self, value:float):
-        self._voice.set_filter_type(int(value), self._synth)
-    def _update_filter_frequency(self, value:float):
-        self._voice.set_filter_frequency(value, self._synth)
-    def _update_filter_resonance(self, value:float):
-        self._voice.set_filter_resonance(value, self._synth)
+        self._rate = NumberMenuItem(
+            "Rate",
+            maximum=4.0,
+            update=update_rate
+        )
+        MenuGroup.__init__(self, (
+            self._depth,
+            self._rate
+        ), group)
+    def enable(self, display:Display, last:bool = False):
+        MenuGroup.enable(self, display, last)
+        display.enable_horizontal_graph()
+    def draw(self, display:Display):
+        display.write_horizontal_graph(
+            value=self._depth.get_relative(),
+            position=(0,1),
+            width=10
+        )
+        display.write("{:.1f}hz".format(self._rate.get()), position=(10,1), length=6, right_aligned=True)
+
+class FilterMenuGroup(MenuGroup):
+    def __init__(self, voices:Voice|tuple[Voice], group:str=""):
+        voices = get_tuple(voices)
+        self._type = ListMenuItem(
+            ("LP", "HP", "BP"),
+            "Type",
+            update=apply_value(voices, Voice.set_filter_type)
+        )
+        self._frequency = NumberMenuItem(
+            "Freq",
+            initial=1.0,
+            step=0.05,
+            update=apply_value(voices, Voice.set_filter_frequency)
+        )
+        self._resonance = NumberMenuItem(
+            "Reso",
+            update=apply_value(voices, Voice.set_filter_resonance)
+        )
+        MenuGroup.__init__(self, (
+            self._type,
+            self._frequency,
+            self._resonance
+        ), group)
+    def enable(self, display:Display, last:bool = False):
+        MenuGroup.enable(self, display, last)
+        display.enable_horizontal_graph()
+    def draw(self, display:Display):
+        display.write(
+            self._type.get_item(),
+            position=(0,1),
+            length=2
+        )
+        display.write(
+            "{:d}hz".format(int(map_value(self._frequency.get(), MIN_FILTER_FREQUENCY, MAX_FILTER_FREQUENCY))),
+            position=(2,1),
+            length=8,
+            right_aligned=True
+        )
+        display.write_horizontal_graph(
+            value=self._resonance.get(),
+            position=(10,1),
+            width=6
+        )
+
+class VoiceMenuGroup(MenuGroup):
+    def __init__(self, voices:Voice|tuple[Voice], group:str=""):
+        voices = get_tuple(voices)
+        MenuGroup.__init__(self, (
+            BarMenuItem(
+                "Level",
+                initial=1.0,
+                update=apply_value(voices, "set_level")
+            ),
+            BarMenuItem(
+                "Velocity",
+                initial=0.0,
+                update=apply_value(voices, Voice.set_velocity_amount)
+            ),
+            FilterMenuGroup(voices, "Filter")
+        ), group)
 
 class OscillatorMenuGroup(VoiceMenuGroup):
-    def __init__(self, voice:Oscillator, synth:Synth, group:str=""):
-        VoiceMenuGroup.__init__(self, voice, synth, (
-            BarMenuItem("Glide", update=voice.set_glide),
-            BarMenuItem("Pitch Bend", step=1/8, minimum=-1.0, update=voice.set_pitch_bend_amount),
-            BarMenuItem("Course Tune", step=1/12, minimum=-2.0, maximum=2.0, update=voice.set_coarse_tune),
-            BarMenuItem("Fine Tune", step=1/12/16, minimum=-1/12, maximum=1/12, update=voice.set_fine_tune),
-            ListMenuItem(("Square", "Sawtooth", "Sine", "Noise", "Sine Noise"), "Waveform", update=self._update_waveform),
-            BarMenuItem("Tremolo Rate", maximum=4.0, update=voice.set_tremolo_rate),
-            BarMenuItem("Tremolo Depth", step=1/64, maximum=0.5, update=voice.set_tremolo_depth),
-            BarMenuItem("Vibrato Rate", maximum=4.0, update=voice.set_vibrato_rate),
-            BarMenuItem("Vibrato Depth", step=1/64, maximum=0.5, update=voice.set_vibrato_depth),
-            BarMenuItem("Pan", step=1/8, minimum=-1.0, update=voice.set_pan),
-            BarMenuItem("Pan Rate", maximum=4.0, update=voice.set_pan_rate),
-            BarMenuItem("Pan Depth", update=voice.set_pan_depth),
-            ADSREnvelopeMenuGroup(voice, group=group+"AEnv"),
-            BarMenuItem("Fltr LFO Rate", maximum=4.0, update=voice.set_filter_lfo_rate),
-            BarMenuItem("Fltr LFO Depth", step=1/64, maximum=0.5, update=voice.set_filter_lfo_depth),
-            AREnvelopeMenuGroup(voice._filter_envelope, group=group+"FEnv")
-        ), group)
-    def _update_waveform(self, value:float):
+    def __init__(self, voices:Oscillator|tuple[Oscillator], group:str=""):
+        voices = get_tuple(voices)
+        VoiceMenuGroup.__init__(self, voices, group)
+        self._items = self._items + (
+            BarMenuItem(
+                "Glide",
+                update=apply_value(voices, Oscillator.set_glide)
+            ),
+            BarMenuItem(
+                "Pitch Bend",
+                step=1/8,
+                minimum=-1.0,
+                update=apply_value(voices, Oscillator.set_pitch_bend_amount)
+            ),
+            BarMenuItem(
+                "Course Tune",
+                step=1/12,
+                minimum=-2.0,
+                maximum=2.0,
+                update=apply_value(voices, Oscillator.set_coarse_tune)
+            ),
+            BarMenuItem(
+                "Fine Tune",
+                step=1/12/16,
+                minimum=-1/12,
+                maximum=1/12,
+                update=apply_value(voices, Oscillator.set_fine_tune)
+            ),
+            WaveformMenuItem(
+                update=apply_value(voices, Oscillator.set_waveform)
+            ),
+            LFOMenuGroup(
+                update_depth=apply_value(voices, Oscillator.set_tremolo_depth),
+                update_rate=apply_value(voices, Oscillator.set_tremolo_rate, 0.025),
+                group=group+"Tremolo"
+            ),
+            LFOMenuGroup(
+                update_depth=apply_value(voices, Oscillator.set_vibrato_depth),
+                update_rate=apply_value(voices, Oscillator.set_vibrato_rate, 0.025),
+                group=group+"Vibrato"
+            ),
+            BarMenuItem(
+                "Pan",
+                step=1/8,
+                minimum=-1.0,
+                update=apply_value(voices, Oscillator.set_pan)
+            ),
+            LFOMenuGroup(
+                update_depth=apply_value(voices, Oscillator.set_pan_depth),
+                update_rate=apply_value(voices, Oscillator.set_pan_rate, 0.025),
+                group=group+"Pan"
+            ),
+            ADSREnvelopeMenuGroup(
+                voices,
+                group=group+"AEnv"
+            ),
+            BarMenuItem(
+                "Fltr LFO Rate",
+                maximum=4.0,
+                update=apply_value(voices, Oscillator.set_filter_lfo_rate)
+            ),
+            BarMenuItem(
+                "Fltr LFO Depth",
+                step=1/64,
+                maximum=0.5,
+                update=apply_value(voices, Oscillator.set_filter_lfo_depth)
+            ),
+            AREnvelopeMenuGroup(
+                tuple(voice._filter_envelope for voice in voices),
+                group=group+"FEnv"
+            )
+        )
+        self._assign_group_name()
+    def _update_waveform(voice:Oscillator, value:float):
         value = int(value)
-        waveform = None
-        if value == 0:
-            waveform = Waveform.get_square()
-        elif value == 1:
+        if value == 1:
             waveform = Waveform.get_saw()
         elif value == 2:
             waveform = Waveform.get_sine()
@@ -291,8 +524,10 @@ class OscillatorMenuGroup(VoiceMenuGroup):
             waveform = Waveform.get_noise()
         elif value == 4:
             waveform = Waveform.get_sine_noise()
+        else:
+            waveform = Waveform.get_square()
         if waveform:
-            self._voice.set_waveform(waveform)
+            voice.set_waveform(waveform)
 
 class Menu(MenuGroup):
     def __init__(self, items:tuple, group:str = "", write:function=None):
