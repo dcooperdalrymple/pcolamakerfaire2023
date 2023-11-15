@@ -618,6 +618,15 @@ class OscillatorMenuGroup(MenuGroup):
             WaveformMenuItem(
                 update=apply_value(voices, Oscillator.set_waveform)
             ),
+            FilterMenuGroup(voices, "Filter"),
+            ADSREnvelopeMenuGroup(
+                voices,
+                group=group+"AEnv"
+            ),
+            AREnvelopeMenuGroup(
+                tuple(voice._filter_envelope for voice in voices),
+                group=group+"FEnv"
+            ),
             LFOMenuGroup(
                 update_depth=apply_value(voices, Oscillator.set_tremolo_depth),
                 update_rate=apply_value(voices, Oscillator.set_tremolo_rate, 0.025),
@@ -633,18 +642,10 @@ class OscillatorMenuGroup(MenuGroup):
                 update_rate=apply_value(voices, Oscillator.set_pan_rate, 0.025),
                 group=group+"Pan"
             ),
-            ADSREnvelopeMenuGroup(
-                voices,
-                group=group+"AEnv"
-            ),
             LFOMenuGroup(
                 update_depth=apply_value(voices, Oscillator.set_filter_lfo_depth),
                 update_rate=apply_value(voices, Oscillator.set_filter_lfo_rate),
                 group=group+"FltrLFO"
-            ),
-            AREnvelopeMenuGroup(
-                tuple(voice._filter_envelope for voice in voices),
-                group=group+"FEnv"
             )
         ), group)
 
