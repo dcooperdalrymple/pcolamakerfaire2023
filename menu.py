@@ -651,7 +651,8 @@ class OscillatorMenuGroup(MenuGroup):
 
 class Menu(MenuGroup):
     def __init__(self, items:tuple, group:str = "", write:function=None):
-        MenuGroup.__init__(self, items, group, loop=True)
+        MenuGroup.__init__(self, items, loop=True)
+        self._group = group # avoids assigning group name
 
         self._selected = False
         self._write = write
