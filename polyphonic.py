@@ -16,6 +16,7 @@ audio.mute()
 synth = Synth(audio)
 synth.add_voices([Oscillator() for i in range(4)])
 keyboard = TouchKeyboard(max_notes=4)
+midi = Midi()
 
 # Menu and Patch System
 class PatchMenuItem(NumberMenuItem):
@@ -31,6 +32,20 @@ patch_item = PatchMenuItem()
 
 menu = Menu((
     patch_item,
+    MenuGroup((
+        NumberMenuItem(
+            title="Channel",
+            step=1,
+            maximum=16,
+            update=lambda value : midi.set_channel(int(value))
+        ),
+        NumberMenuItem(
+            title="Thru",
+            step=1,
+            maximum=1,
+            update=lambda value : midi.set_thru(value == 1)
+        ),
+    ), "MIDI"),
     OscillatorMenuGroup(synth.voices, "Osc"),
 ), "polyphonic")
 default_patch = menu.get()
@@ -73,9 +88,6 @@ def release(notenum, keynum=None):
 keyboard.set_release(release)
 
 # Midi Implementation
-midi = Midi()
-midi.set_thru(True)
-
 def control_change(control, value):
     if control == 64: # Sustain
         keyboard.set_sustain(value)

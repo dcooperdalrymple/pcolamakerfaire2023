@@ -18,6 +18,7 @@ osc1 = Oscillator()
 osc2 = Oscillator()
 synth.add_voices((osc1, osc2))
 keyboard = TouchKeyboard()
+midi = Midi()
 
 # Menu and Patch System
 class PatchMenuItem(NumberMenuItem):
@@ -32,6 +33,20 @@ class PatchMenuItem(NumberMenuItem):
 patch_item = PatchMenuItem()
 
 menu = Menu((
+    MenuGroup((
+        NumberMenuItem(
+            title="Channel",
+            step=1,
+            maximum=16,
+            update=lambda value : midi.set_channel(int(value))
+        ),
+        NumberMenuItem(
+            title="Thru",
+            step=1,
+            maximum=1,
+            update=lambda value : midi.set_thru(value == 1)
+        ),
+    ), "MIDI"),
     patch_item,
     MenuGroup((
         BarMenuItem("Level", initial=1.0, update=audio.set_level),
@@ -39,8 +54,8 @@ menu = Menu((
     MenuGroup((
         ListMenuItem(("High", "Low", "Last"), "Mode", update=keyboard.set_mode),
     ), "Keys"),
-    OscillatorMenuGroup(osc1, "Osc1"),
-    OscillatorMenuGroup(osc2, "Osc2"),
+    OscillatorMenuGroup((osc1,), "Osc1"),
+    OscillatorMenuGroup((osc2,), "Osc2"),
 ), "monophonic")
 default_patch = menu.get()
 
@@ -69,9 +84,6 @@ def release(notenum, keynum=None):
 keyboard.set_release(release)
 
 # Midi Implementation
-midi = Midi()
-midi.set_thru(True)
-
 def control_change(control, value):
     if control == 64: # Sustain
         keyboard.set_sustain(value)
@@ -104,3 +116,4 @@ while True:
     menu.update()
     keyboard.update()
     synth.update()
+    midi.update()
