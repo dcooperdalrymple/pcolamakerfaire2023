@@ -13,6 +13,8 @@ SRCS := $(LIB_MPY)
 
 MONOPHONIC = monophonic.py
 POLYPHONIC = polyphonic.py
+DRUM_MACHINE = drum_machine.py
+SAMPLER = sampler.py
 
 all: clean compile upload requirements
 
@@ -40,3 +42,11 @@ monophonic:
 polyphonic:
 	echo ./$(POLYPHONIC) "=>" $(DEVICE)code.py
 	@cp ./$(POLYPHONIC) $(DEVICE)code.py
+
+drum_machine:
+	echo ./$(DRUM_MACHINE) "=>" $(DEVICE)code.py
+	@cp ./$(DRUM_MACHINE) $(DEVICE)code.py
+
+sampler:
+	echo ./$(SAMPLER) "=>" $(DEVICE)code.py
+	@cp ./$(SAMPLER) $(DEVICE)code.py
