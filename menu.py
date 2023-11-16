@@ -85,20 +85,20 @@ class NumberMenuItem(MenuItem):
         if self._value == self._maximum:
             if self._loop:
                 self._value = self._minimum
-                return True
             else:
                 return False
-        self._value = min(self._value + self._step, self._maximum)
+        else:
+            self._value = min(self._value + self._step, self._maximum)
         self._do_update()
         return True
     def decrement(self) -> bool:
         if self._value == self._minimum:
             if self._loop:
                 self._value = self._maximum
-                return True
             else:
                 return False
-        self._value = max(self._value - self._step, self._minimum)
+        else:
+            self._value = max(self._value - self._step, self._minimum)
         self._do_update()
         return True
     def reset(self) -> bool:
