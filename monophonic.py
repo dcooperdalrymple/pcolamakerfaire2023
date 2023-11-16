@@ -6,7 +6,7 @@ from menu import Menu, MenuGroup, OscillatorMenuGroup, NumberMenuItem, BarMenuIt
 from pico_synth_sandbox.audio import get_audio_driver
 from pico_synth_sandbox.synth import Synth
 from pico_synth_sandbox.voice.oscillator import Oscillator
-from pico_synth_sandbox.keyboard.touch import TouchKeyboard
+from pico_synth_sandbox.keyboard import get_keyboard_driver
 from pico_synth_sandbox.midi import Midi
 from pico_synth_sandbox.display import Display
 
@@ -17,7 +17,7 @@ synth = Synth(audio)
 osc1 = Oscillator()
 osc2 = Oscillator()
 synth.add_voices((osc1, osc2))
-keyboard = TouchKeyboard()
+keyboard = get_keyboard_driver()
 midi = Midi()
 
 # Menu and Patch System

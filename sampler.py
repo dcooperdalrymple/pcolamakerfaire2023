@@ -6,7 +6,7 @@ import gc, os
 from pico_synth_sandbox import fftfreq
 
 from menu import Menu, MenuGroup, OscillatorMenuGroup, NumberMenuItem, BarMenuItem, ListMenuItem
-from pico_synth_sandbox.keyboard.touch import TouchKeyboard
+from pico_synth_sandbox.keyboard import get_keyboard_driver
 from pico_synth_sandbox.audio import Audio, get_audio_driver
 from pico_synth_sandbox.synth import Synth
 from pico_synth_sandbox.voice.sample import Sample
@@ -84,16 +84,16 @@ menu = Menu((
 ), "sampler")
 
 # Keyboard Setup
-keyboard = TouchKeyboard(root=60)
+keyboard = get_keyboard_driver(root=60)
 def press(notenum, velocity, keynum=None):
     if keynum is None:
-        keynum = (notenum - keyboard.root) % 12
-    synth.press(keynum, notenum, velocity)
+        keynum = notenum - keyboard.root
+    synth.press(keynum % 12, notenum, velocity)
 keyboard.set_press(press)
 def release(notenum, keynum=None):
     if keynum is None:
-        keynum = (notenum - keyboard.root) % 12
-    synth.release(keynum)
+        keynum = notenum - keyboard.root
+    synth.release(keynum % 12)
 keyboard.set_release(release)
 
 # Midi Implementation
