@@ -6,6 +6,7 @@ import gc, os
 from pico_synth_sandbox import fftfreq
 
 from menu import Menu, MenuGroup, OscillatorMenuGroup, NumberMenuItem, BarMenuItem, ListMenuItem
+import pico_synth_sandbox.tasks
 from pico_synth_sandbox.keyboard import get_keyboard_driver
 from pico_synth_sandbox.audio import Audio, get_audio_driver
 from pico_synth_sandbox.synth import Synth
@@ -34,6 +35,7 @@ def load_sample(index=0):
     global semitone, sample_data, sample_rate, sample_root
 
     audio.mute()
+    pico_synth_sandbox.tasks.pause()
 
     for voice in synth.voices:
         voice.unload()
@@ -49,6 +51,7 @@ def load_sample(index=0):
         voice.load(sample_data, sample_rate, sample_root)
 
     gc.collect()
+    pico_synth_sandbox.tasks.resume()
     audio.unmute()
 
 # Menu System
@@ -120,8 +123,5 @@ load_sample()
 
 menu.ready()
 audio.unmute()
-while True:
-    menu.update()
-    keyboard.update()
-    synth.update()
-    midi.update()
+
+pico_synth_sandbox.tasks.run()

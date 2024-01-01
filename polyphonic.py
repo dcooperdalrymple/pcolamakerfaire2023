@@ -3,6 +3,7 @@
 # GPL v3 License
 
 from menu import Menu, MenuGroup, OscillatorMenuGroup, NumberMenuItem, BarMenuItem, ListMenuItem
+import pico_synth_sandbox.tasks
 from pico_synth_sandbox.audio import get_audio_driver
 from pico_synth_sandbox.synth import Synth
 from pico_synth_sandbox.voice.oscillator import Oscillator
@@ -116,7 +117,5 @@ read_patch()
 
 menu.ready()
 audio.unmute()
-while True:
-    menu.update()
-    keyboard.update()
-    synth.update()
+
+pico_synth_sandbox.tasks.run()

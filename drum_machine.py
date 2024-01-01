@@ -2,6 +2,7 @@
 # 2023 Cooper Dalrymple - me@dcdalrymple.com
 # GPL v3 License
 
+import pico_synth_sandbox.tasks
 from pico_synth_sandbox.display import Display
 from pico_synth_sandbox.encoder import Encoder
 from pico_synth_sandbox.keyboard import get_keyboard_driver
@@ -123,8 +124,5 @@ encoder.set_click(click)
 
 update_display()
 sequencer.enable()
-while True:
-    encoder.update()
-    keyboard.update()
-    sequencer.update()
-    synth.update()
+
+pico_synth_sandbox.tasks.run()
