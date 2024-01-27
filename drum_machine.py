@@ -34,7 +34,7 @@ synth.add_voices([
 midi = Midi()
 
 sequencer = Sequencer(
-    tracks=8,
+    tracks=len(synth.voices),
     bpm=120
 )
 def seq_step(position):
