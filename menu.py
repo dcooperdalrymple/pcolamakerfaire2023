@@ -4,13 +4,12 @@
 
 import time, os, json, math
 import ulab.numpy as numpy
-from pico_synth_sandbox import clamp, map_value, unmap_value, check_dir
+from pico_synth_sandbox import clamp, map_value, unmap_value, check_dir, get_filter_frequency_range
 from pico_synth_sandbox.display import Display
 from pico_synth_sandbox.encoder import Encoder
-from pico_synth_sandbox.synth import MIN_FILTER_FREQUENCY, MAX_FILTER_FREQUENCY
 from pico_synth_sandbox.voice import Voice, AREnvelope
 from pico_synth_sandbox.voice.oscillator import Oscillator
-from pico_synth_sandbox.waveform import Waveform
+import pico_synth_sandbox.waveform as waveform
 
 def apply_value(items:tuple, method:function|str, offset:float=0.0) -> function:
     if type(method) is str:
@@ -150,7 +149,7 @@ class WaveformMenuItem(ListMenuItem):
     def __init__(self, group:str="", update:function=None):
         ListMenuItem.__init__(
             self,
-            items=("SQUR", "SAWT", "SINE", "NOISE", "SINN"),
+            items=("SQUR", "SAWT", "TRNGL", "SINE", "NOISE", "SINN"),
             title="Waveform",
             group=group,
             update=update
@@ -158,30 +157,32 @@ class WaveformMenuItem(ListMenuItem):
     def get_waveform(self):
         value = int(self._value)
         if value == 1:
-            return Waveform.get_saw()
+            return waveform.get_saw()
         elif value == 2:
-            return Waveform.get_sine()
+            return waveform.get_triangle()
         elif value == 3:
-            return Waveform.get_noise()
+            return waveform.get_sine()
         elif value == 4:
-            return Waveform.get_sine_noise()
+            return waveform.get_noise()
+        elif value == 5:
+            return waveform.get_sine_noise()
         else:
-            return Waveform.get_square()
+            return waveform.get_square()
     def _do_update(self):
         if self._update: self._update(self.get_waveform())
     def enable(self, display:Display):
         ListMenuItem.enable(self, display)
         display.enable_vertical_graph()
     def draw(self, display:Display):
-        waveform = self.get_waveform()
+        wave = self.get_waveform()
         periods = 2
         wavelength = 16//periods
-        segment = len(waveform)//wavelength
-        amplitude = Waveform.get_amplitude()
+        segment = len(wave)//wavelength
+        amplitude = waveform.get_amplitude()
         for j in range(periods):
             for i in range(wavelength):
                 display.write_vertical_graph(
-                    value=numpy.sum(waveform[i*segment:(i+1)*segment]) / segment,
+                    value=numpy.sum(wave[i*segment:(i+1)*segment]) / segment,
                     minimum=-amplitude*11/8,
                     maximum=amplitude,
                     position=(i+j*wavelength,1)
@@ -465,8 +466,9 @@ class FilterMenuGroup(MenuGroup):
             position=(0,1),
             length=2
         )
+        range = get_filter_frequency_range()
         display.write(
-            "{:d}hz".format(int(map_value(self._frequency.get(), MIN_FILTER_FREQUENCY, MAX_FILTER_FREQUENCY))),
+            "{:d}hz".format(int(map_value(self._frequency.get(), range[0], range[1]))),
             position=(2,1),
             length=8,
             right_aligned=True
@@ -650,15 +652,15 @@ class OscillatorMenuGroup(MenuGroup):
         ), group)
 
 class Menu(MenuGroup):
-    def __init__(self, items:tuple, group:str = "", write:function=None):
+    def __init__(self, board, items:tuple, group:str = "", write:function=None):
         MenuGroup.__init__(self, items, loop=True)
         self._group = group # avoids assigning group name
 
         self._selected = False
         self._write = write
 
-        self._display = Display()
-        self._encoder = Encoder()
+        self._display = Display(board)
+        self._encoder = Encoder(board)
 
         self._display.clear()
         self._display.hide_cursor()

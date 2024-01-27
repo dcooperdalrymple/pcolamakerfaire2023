@@ -4,6 +4,7 @@
 
 from menu import Menu, MenuGroup, OscillatorMenuGroup, NumberMenuItem, BarMenuItem, ListMenuItem
 import pico_synth_sandbox.tasks
+from pico_synth_sandbox.board import get_board
 from pico_synth_sandbox.audio import get_audio_driver
 from pico_synth_sandbox.synth import Synth
 from pico_synth_sandbox.voice.oscillator import Oscillator
@@ -12,14 +13,15 @@ from pico_synth_sandbox.midi import Midi
 from pico_synth_sandbox.display import Display
 
 # Initialize Synth and other objects first for reference in menu items
-audio = get_audio_driver()
+board = get_board()
+audio = get_audio_driver(board)
 audio.mute()
 synth = Synth(audio)
 osc1 = Oscillator()
 osc2 = Oscillator()
 synth.add_voices((osc1, osc2))
-keyboard = get_keyboard_driver()
-midi = Midi()
+keyboard = get_keyboard_driver(board)
+midi = Midi(board)
 
 # Menu and Patch System
 class PatchMenuItem(NumberMenuItem):
@@ -33,7 +35,7 @@ class PatchMenuItem(NumberMenuItem):
         NumberMenuItem.enable(self, display)
 patch_item = PatchMenuItem()
 
-menu = Menu((
+menu = Menu(board, (
     MenuGroup((
         NumberMenuItem(
             title="Channel",
