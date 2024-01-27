@@ -442,10 +442,11 @@ class FilterMenuGroup(MenuGroup):
             "Type",
             update=apply_value(voices, Voice.set_filter_type)
         )
-        self._frequency = NumberMenuItem(
+        self._frequency = RampNumberMenuItem(
             "Freq",
             initial=1.0,
-            step=0.05,
+            step=0.01,
+            smoothing=3.0,
             update=apply_value(voices, Voice.set_filter_frequency)
         )
         self._resonance = BarMenuItem(
