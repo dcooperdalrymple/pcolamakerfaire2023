@@ -20,7 +20,7 @@ synth = Synth(audio)
 osc1 = Oscillator()
 osc2 = Oscillator()
 synth.add_voices((osc1, osc2))
-keyboard = get_keyboard_driver(board)
+keyboard = get_keyboard_driver(board, max_voices=1)
 midi = Midi(board)
 
 # Menu and Patch System
@@ -76,15 +76,22 @@ def write_patch():
 menu.set_write(write_patch)
 
 # Keyboard Setup
-def press(notenum, velocity, keynum=None):
+def voice_press(index, notenum, velocity, keynum=None):
     for voice in synth.voices:
         synth.press(voice, notenum, velocity)
-keyboard.set_press(press)
+keyboard.set_voice_press(voice_press)
 
-def release(notenum, keynum=None):
-    if not keyboard.has_notes():
-        synth.release()
-keyboard.set_release(release)
+def voice_release(index, notenum, keynum=None):
+    synth.release()
+keyboard.set_voice_release(voice_release)
+
+def key_press(keynum, notenum, velocity):
+    midi.send_note_on(notenum, velocity)
+keyboard.set_key_press(key_press)
+
+def key_release(keynum, notenum):
+    midi.send_note_off(notenum)
+keyboard.set_key_release(key_release)
 
 # Midi Implementation
 def control_change(control, value):

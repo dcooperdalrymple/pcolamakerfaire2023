@@ -657,11 +657,15 @@ class Menu(MenuGroup):
         MenuGroup.__init__(self, items, loop=True)
         self._group = group # avoids assigning group name
 
-        self._selected = False
         self._write = write
 
         self._display = Display(board)
-        self._encoder = Encoder(board)
+
+        self._selected = False
+        if board.num_encoders() == 1:
+            self._encoders = (Encoder(board),)
+        elif board.num_encoders() > 1:
+            self._encoders = (Encoder(board, 0), Encoder(board, 1))
 
         self._display.clear()
         self._display.hide_cursor()
@@ -676,54 +680,92 @@ class Menu(MenuGroup):
         self.draw()
         self.enable()
 
-    def enable(self):
-        self._encoder.set_click(self.encoder_click)
-        self._encoder.set_double_click(self.encoder_double_click)
-        self._encoder.set_long_press(self.encoder_long_press)
-        self._encoder.set_increment(self.encoder_increment)
-        self._encoder.set_decrement(self.encoder_decrement)
-        MenuGroup.enable(self, self._display)
-    def disable(self):
-        self._encoder.set_click(None)
-        self._encoder.set_double_click(None)
-        self._encoder.set_long_press(None)
-        self._encoder.set_increment(None)
-        self._encoder.set_decrement(None)
-        MenuGroup.disable(self)
-
-    def encoder_click(self):
+    def encoder_toggle(self):
         self._selected = not self._selected
         self.update_cursor_position()
+    def encoder_reset(self):
+        if not self._selected:
+            self._selected = True
+        if self.reset():
+            self.draw()
+    def encoder_next_group(self):
+        if self._selected:
+            self._selected = False
+        self.next(force=True)
     def encoder_double_click(self):
         if self._selected:
-            if self.reset():
-                self.draw()
+            self.encoder_reset()
         else:
-            self.next(force=True)
-    def encoder_long_press(self):
+            self.encoder_next_group()
+    def encoder_save(self):
         self.disable()
         self._display.clear()
         self._display.write("Saving...")
+        self._display.update()
         if self._write:
             self._write()
         else:
             self.write()
         self._display.write("Complete!")
+        self._display.update()
         time.sleep(0.5)
+        if self._selected:
+            self._selected = False
         self.enable()
         self.draw()
+    def encoder_increment_value(self):
+        if not self._selected:
+            self._selected = True
+        if self.increment():
+            self.draw()
+    def encoder_increment_item(self):
+        if self._selected:
+            self._selected = False
+        self.next()
     def encoder_increment(self):
         if self._selected:
-            if self.increment():
-                self.draw()
+            self.encoder_increment_value()
         else:
-            self.next()
+            self.encoder_increment_item()
+    def encoder_decrement_value(self):
+        if not self._selected:
+            self._selected = True
+        if self.decrement():
+            self.draw()
+    def encoder_decrement_item(self):
+        if self._selected:
+            self._selected = False
+        self.previous()
     def encoder_decrement(self):
         if self._selected:
-            if self.decrement():
-                self.draw()
+            self.encoder_decrement_value()
         else:
-            self.previous()
+            self.encoder_decrement_item()
+
+    def enable(self):
+        if len(self._encoders) == 1:
+            self._encoders[0].set_click(self.encoder_toggle)
+            self._encoders[0].set_double_click(self.encoder_double_click)
+            self._encoders[0].set_long_press(self.encoder_long_press)
+            self._encoders[0].set_increment(self.encoder_increment)
+            self._encoders[0].set_decrement(self.encoder_decrement)
+        else:
+            self._encoders[0].set_double_click(self.encoder_next_group)
+            self._encoders[0].set_long_press(self.encoder_save)
+            self._encoders[0].set_increment(self.encoder_increment_item)
+            self._encoders[0].set_decrement(self.encoder_decrement_item)
+            self._encoders[1].set_long_press(self.encoder_reset)
+            self._encoders[1].set_increment(self.encoder_increment_value)
+            self._encoders[1].set_decrement(self.encoder_decrement_value)
+        MenuGroup.enable(self, self._display)
+    def disable(self):
+        for encoder in self._encoders:
+            encoder.set_click(None)
+            encoder.set_double_click(None)
+            encoder.set_long_press(None)
+            encoder.set_increment(None)
+            encoder.set_decrement(None)
+        MenuGroup.disable(self)
 
     def navigate(self, step:int, display:Display=None, force:bool=False):
         if not display: display=self._display

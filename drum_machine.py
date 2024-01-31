@@ -3,6 +3,7 @@
 # GPL v3 License
 
 import pico_synth_sandbox.tasks
+from pico_synth_sandbox.board import get_board
 from pico_synth_sandbox.display import Display
 from pico_synth_sandbox.encoder import Encoder
 from pico_synth_sandbox.keyboard import get_keyboard_driver
@@ -12,7 +13,9 @@ from pico_synth_sandbox.synth import Synth
 from pico_synth_sandbox.voice.drum import Kick, Snare, ClosedHat, OpenHat
 from pico_synth_sandbox.midi import Midi
 
-display = Display()
+board = get_board()
+
+display = Display(board)
 display.write("PicoSynthSandbox", (0,0))
 display.write("Loading...", (0,1))
 display.set_cursor_blink(False)
@@ -23,7 +26,7 @@ bpm=120
 alt_enc=False
 alt_key=False
 
-audio = get_audio_driver()
+audio = get_audio_driver(board)
 synth = Synth(audio)
 synth.add_voices([
     Kick(),
@@ -31,7 +34,7 @@ synth.add_voices([
     ClosedHat(),
     OpenHat()
 ])
-midi = Midi()
+midi = Midi(board)
 
 sequencer = Sequencer(
     tracks=len(synth.voices),
@@ -59,10 +62,10 @@ def update_display():
         line += "*" if sequencer.has_note(i, voice) else "_"
     display.write(line, (0,1))
 
-keyboard = get_keyboard_driver()
-def key_press(notenum, velocity, keynum=None):
-    if keynum is None: return
-    
+keyboard = get_keyboard_driver(board, max_voices=0)
+def key_press(keynum, notenum, velocity):
+    global voice
+
     if len(keyboard.keys) < 16:
         global alt_key
         if keynum == 11:
@@ -92,37 +95,81 @@ def key_press(notenum, velocity, keynum=None):
             track=voice
         )
         display.write("_", (position,1), 1)
-keyboard.set_press(key_press)
+keyboard.set_key_press(key_press)
 
-encoder = Encoder()
 def update_bpm():
     sequencer.set_bpm(bpm)
     display.write(str(bpm), (13,0), 3, True)
-def increment():
-    global voice, bpm
+def update_selected():
+    global alt_enc
+    display.write(">" if alt_enc else "<", (11,0), 1)
+def increment_voice():
+    global voice, alt_enc
+    if alt_enc:
+        alt_enc = False
+        update_selected()
+    voice = (voice + 1) % sequencer.get_tracks()
+    update_display()
+def decrement_voice():
+    global voice, alt_enc
+    if alt_enc:
+        alt_enc = False
+        update_selected()
+    voice = (voice - 1) % sequencer.get_tracks()
+    update_display()
+def increment_bpm():
+    global bpm, alt_enc
     if not alt_enc:
-        voice = (voice + 1) % sequencer.get_tracks()
-        update_display()
-    elif bpm < 200:
-            bpm += 1
-            update_bpm()
-def decrement():
-    global voice, bpm
+        alt_enc = True
+        update_selected()
+    if bpm < 200:
+        bpm += 1
+        update_bpm()
+def decrement_bpm():
+    global bpm, alt_enc
     if not alt_enc:
-        voice = (voice - 1) % sequencer.get_tracks()
-        update_display()
-    elif bpm > 50:
+        alt_enc = True
+        update_selected()
+    if bpm > 50:
         bpm -= 1
         update_bpm()
-def click():
+def encoder_increment():
+    if not alt_enc:
+        increment_voice()
+    else:
+        increment_bpm()
+def encoder_decrement():
+    if not alt_enc:
+        decrement_voice()
+    else:
+        decrement_bpm()
+def encoder_toggle():
     global alt_enc
     alt_enc = not alt_enc
-    display.write(">" if alt_enc else "<", (11,0), 1)
-encoder.set_increment(increment)
-encoder.set_decrement(decrement)
-encoder.set_click(click)
+    update_selected()
+def toggle_sequencer():
+    sequencer.toggle()
+def clear_track():
+    for i in range(sequencer.get_length()):
+        sequencer.remove_note(position=i, track=voice)
+    update_display()
 
 update_display()
-sequencer.enable()
+
+if board.num_encoders() == 1:
+    encoder = Encoder(board)
+    encoder.set_increment(encoder_increment)
+    encoder.set_decrement(encoder_decrement)
+    encoder.set_click(encoder_toggle)
+    encoder.set_double_click(toggle_sequencer)
+elif board.num_encoders() > 1:
+    encoders = (Encoder(board, 0), Encoder(board, 1))
+    encoders[0].set_increment(increment_voice)
+    encoders[0].set_decrement(decrement_voice)
+    encoders[0].set_long_press(clear_track)
+    encoders[1].set_increment(increment_bpm)
+    encoders[1].set_decrement(decrement_bpm)
+    encoders[1].set_click(toggle_sequencer)
+    # TODO: encoders[1].set_long_press(save_sequence)
 
 pico_synth_sandbox.tasks.run()

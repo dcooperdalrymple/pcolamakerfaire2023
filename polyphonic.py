@@ -18,7 +18,7 @@ audio = get_audio_driver(board)
 audio.mute()
 synth = Synth(audio)
 synth.add_voices([Oscillator() for i in range(4)])
-keyboard = get_keyboard_driver(board, max_notes=4)
+keyboard = get_keyboard_driver(board, max_voices=len(synth.voices))
 midi = Midi(board)
 
 # Menu and Patch System
@@ -67,28 +67,21 @@ def write_patch():
 menu.set_write(write_patch)
 
 # Keyboard Setup
-def press(notenum, velocity, keynum=None):
-    # TODO: Better voice allocation.
-    index = -1
-    for i in range(len(synth.voices)):
-        if not synth.voices[i]._notenum:
-            index = i
-    if index < 0:
-        minnotenum = 128
-        for i in range(len(synth.voices)):
-            if synth.voices[i]._notenum < minnotenum:
-                minnotenum = synth.voices[i]._notenum
-                index = i
-    if index < 0:
-        return
+def voice_press(index, notenum, velocity, keynum=None):
     synth.press(index, notenum, velocity)
-keyboard.set_press(press)
+keyboard.set_voice_press(voice_press)
 
-def release(notenum, keynum=None):
-    for voice in synth.voices:
-        if voice._notenum == notenum:
-            synth.release(voice)
-keyboard.set_release(release)
+def voice_release(index, notenum, keynum=None):
+    synth.release(index)
+keyboard.set_voice_release(voice_release)
+
+def key_press(keynum, notenum, velocity):
+    midi.send_note_on(notenum, velocity)
+keyboard.set_key_press(key_press)
+
+def key_release(keynum, notenum):
+    midi.send_note_off(notenum)
+keyboard.set_key_release(key_release)
 
 # Midi Implementation
 def control_change(control, value):

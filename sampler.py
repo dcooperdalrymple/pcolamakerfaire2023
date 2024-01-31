@@ -7,23 +7,25 @@ from pico_synth_sandbox import fftfreq
 
 from menu import Menu, MenuGroup, OscillatorMenuGroup, NumberMenuItem, BarMenuItem, ListMenuItem
 import pico_synth_sandbox.tasks
+from pico_synth_sandbox.board import get_board
 from pico_synth_sandbox.keyboard import get_keyboard_driver
 from pico_synth_sandbox.audio import Audio, get_audio_driver
 from pico_synth_sandbox.synth import Synth
 from pico_synth_sandbox.voice.sample import Sample
-from pico_synth_sandbox.waveform import Waveform
+import pico_synth_sandbox.waveform as waveform
 from pico_synth_sandbox.midi import Midi
 
 # Initialize Objects
-audio = get_audio_driver()
+board = get_board()
+audio = get_audio_driver(board)
 audio.mute()
 synth = Synth(audio)
-synth.add_voices(Sample(loop=False) for i in range(12))
-midi = Midi()
+synth.add_voices(Sample(loop=False) for i in range(4))
+midi = Midi(board)
 
 # Prepare Sample Files
 sample_data = None
-sample_rate = Audio.get_sample_rate()
+sample_rate = audio.get_sample_rate()
 sample_root = 440.0
 
 sample_files = list(filter(lambda x: x[-4:] == ".wav", os.listdir("/samples")))
@@ -42,7 +44,7 @@ def load_sample(index=0):
     del sample_data
     gc.collect()
 
-    sample_data, sample_rate = Waveform.load_from_file("/samples/" + sample_files[index], max_samples=4096)
+    sample_data, sample_rate = waveform.load_from_file("/samples/" + sample_files[index], max_samples=4096)
     sample_root = fftfreq(
         data=sample_data,
         sample_rate=sample_rate
@@ -55,7 +57,7 @@ def load_sample(index=0):
     audio.unmute()
 
 # Menu System
-menu = Menu((
+menu = Menu(board, (
     MenuGroup((
         NumberMenuItem(
             title="Channel",
@@ -87,17 +89,16 @@ menu = Menu((
 ), "sampler")
 
 # Keyboard Setup
-keyboard = get_keyboard_driver(root=60)
-def press(notenum, velocity, keynum=None):
-    if keynum is None:
-        keynum = notenum - keyboard.root
-    synth.press(keynum % 12, notenum, velocity)
-keyboard.set_press(press)
-def release(notenum, keynum=None):
-    if keynum is None:
-        keynum = notenum - keyboard.root
-    synth.release(keynum % 12)
-keyboard.set_release(release)
+keyboard = get_keyboard_driver(board, root=60, max_voices=len(synth.voices))
+def press(voice, notenum, velocity, keynum=None):
+    synth.press(voice, notenum, velocity)
+    midi.send_note_on(notenum, velocity)
+keyboard.set_voice_press(press)
+
+def release(voice, notenum, keynum=None):
+    synth.release(voice)
+    midi.send_note_off(notenum)
+keyboard.set_voice_release(release)
 
 # Midi Implementation
 def control_change(control, value):
@@ -117,6 +118,11 @@ midi.set_note_on(note_on)
 def note_off(notenum):
     keyboard.remove(notenum)
 midi.set_note_off(note_off)
+
+def program_change(patch):
+    if patch < len(sample_files):
+        load_sample(patch)
+midi.set_program_change(program_change)
 
 # Load first sample
 load_sample()
